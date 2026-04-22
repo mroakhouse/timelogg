@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Timelogg">
 <meta name="theme-color" content="#2e6da4">
 <title>Timelogg</title>
-<script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gotrue-js@0.9.29/dist/gotrue.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
@@ -157,6 +157,14 @@
 
   .login-btn{width:100%;background:var(--blue);border:none;border-radius:var(--r);padding:13px 0;font-size:14px;font-weight:500;color:#fff;cursor:pointer;transition:background .12s;margin-top:4px}
   .login-btn:active{background:var(--blue-dark)}
+  .login-tabs{display:flex;border-radius:var(--r);overflow:hidden;border:1px solid var(--border);margin-bottom:18px}
+  .login-tab{flex:1;background:var(--surface2);border:none;padding:9px 0;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;transition:background .12s,color .12s}
+  .login-tab.active{background:var(--blue);color:#fff}
+  .login-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:11px 12px;font-size:15px;color:var(--text);outline:none;margin-bottom:8px;-webkit-appearance:none;transition:border-color .15s}
+  .login-input:focus{border-color:var(--blue-mid);box-shadow:0 0 0 2px var(--blue-light)}
+  .login-msg{font-size:12px;margin-top:8px;min-height:16px;text-align:center}
+  .login-msg.err{color:var(--red)}
+  .login-msg.ok{color:var(--teal)}
   .login-user{font-family:var(--mono);font-size:11px;color:rgba(255,255,255,.7);letter-spacing:.04em}
   .sync-dot{width:7px;height:7px;border-radius:50%;background:#2a9d8f;display:inline-block;margin-right:5px;flex-shrink:0}
   .sync-dot.syncing{background:#e07b2a;animation:pulse .8s infinite}
@@ -170,8 +178,15 @@
 <div class="login-overlay" id="login-overlay">
   <div class="login-box">
     <div class="login-title">Timelogg</div>
-    <div class="login-sub">Logg inn for å fortsette</div>
-    <button class="login-btn" id="login-btn">Logg inn / Registrer</button>
+    <div class="login-tabs">
+      <button class="login-tab active" id="tab-login">Logg inn</button>
+      <button class="login-tab" id="tab-register">Registrer</button>
+    </div>
+    <input class="login-input" type="email" id="login-email" placeholder="E-post" autocomplete="email">
+    <input class="login-input" type="password" id="login-password" placeholder="Passord" autocomplete="current-password">
+    <input class="login-input" type="password" id="login-password2" placeholder="Bekreft passord" style="display:none">
+    <button class="login-btn" id="login-btn">Logg inn</button>
+    <div class="login-msg" id="login-msg"></div>
   </div>
 </div>
 
@@ -333,30 +348,88 @@ async function saveToBlobs(){
 
 function debouncedSave(){save();if(!currentUser)return;clearTimeout(syncTimeout);syncTimeout=setTimeout(saveToBlobs,1500);}
 
-// ── Identity ──
+// ── Identity (GoTrue) ──
+const auth = new GoTrue({
+  APIUrl: 'https://timelogg1.netlify.app/.netlify/identity',
+  audience: '',
+  setCookie: true,
+});
+
 function showApp(user){
-  currentUser=user;
-  document.getElementById('login-overlay').style.display='none';
+  currentUser = user;
+  document.getElementById('login-overlay').style.display = 'none';
   loadFromBlobs();
 }
 function showLogin(){
-  currentUser=null;
-  document.getElementById('login-overlay').style.display='flex';
+  currentUser = null;
+  document.getElementById('login-overlay').style.display = 'flex';
 }
-
 async function getToken(){
-  const user=netlifyIdentity.currentUser();
-  if(!user)return null;
-  try{await user.jwt(true);return user.token.access_token;}catch(e){return null;}
+  if(!currentUser) return null;
+  try { await currentUser.jwt(true); return currentUser.token.access_token; } catch(e) { return null; }
 }
 
-netlifyIdentity.on('init', user => { if(user) showApp(user); else showLogin(); });
-netlifyIdentity.on('login', user => { netlifyIdentity.close(); showApp(user); showToast('Logget inn som '+user.email); });
-netlifyIdentity.on('logout', () => { showLogin(); showToast('Logget ut'); });
-netlifyIdentity.init({ APIUrl: 'https://timelogg1.netlify.app/.netlify/identity' });
+// Restore session
+const _existing = auth.currentUser();
+if(_existing) showApp(_existing); else showLogin();
 
-document.getElementById('login-btn').addEventListener('click', () => netlifyIdentity.open());
-document.getElementById('btn-logout').addEventListener('click', () => netlifyIdentity.logout());
+// Tabs
+let authMode = 'login';
+function setMode(mode){
+  authMode = mode;
+  document.getElementById('tab-login').classList.toggle('active', mode==='login');
+  document.getElementById('tab-register').classList.toggle('active', mode==='register');
+  document.getElementById('login-password2').style.display = mode==='register' ? '' : 'none';
+  document.getElementById('login-btn').textContent = mode==='register' ? 'Registrer' : 'Logg inn';
+  document.getElementById('login-msg').textContent = '';
+  document.getElementById('login-msg').className = 'login-msg';
+}
+document.getElementById('tab-login').addEventListener('click', () => setMode('login'));
+document.getElementById('tab-register').addEventListener('click', () => setMode('register'));
+
+// Submit
+document.getElementById('login-btn').addEventListener('click', async () => {
+  const email = document.getElementById('login-email').value.trim();
+  const pw = document.getElementById('login-password').value;
+  const pw2 = document.getElementById('login-password2').value;
+  const msg = document.getElementById('login-msg');
+  const btn = document.getElementById('login-btn');
+  msg.className = 'login-msg';
+  msg.textContent = '';
+  if(!email || !pw){ msg.className='login-msg err'; msg.textContent='Fyll inn e-post og passord'; return; }
+  if(authMode==='register' && pw !== pw2){ msg.className='login-msg err'; msg.textContent='Passordene stemmer ikke'; return; }
+  if(authMode==='register' && pw.length < 6){ msg.className='login-msg err'; msg.textContent='Passord må være minst 6 tegn'; return; }
+  btn.disabled = true;
+  btn.textContent = authMode==='register' ? 'Registrerer...' : 'Logger inn...';
+  try {
+    if(authMode === 'register'){
+      await auth.signup(email, pw);
+      msg.className = 'login-msg ok';
+      msg.textContent = 'Sjekk e-posten din for bekreftelseslenke ✓';
+      btn.disabled = false; btn.textContent = 'Registrer';
+    } else {
+      const user = await auth.login(email, pw, true);
+      showApp(user);
+      showToast('Logget inn som ' + user.email);
+    }
+  } catch(e){
+    msg.className = 'login-msg err';
+    msg.textContent = e.json?.error_description || e.message || 'Noe gikk galt';
+    btn.disabled = false;
+    btn.textContent = authMode==='register' ? 'Registrer' : 'Logg inn';
+  }
+});
+
+document.getElementById('login-email').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('login-password').focus(); });
+document.getElementById('login-password').addEventListener('keydown', e => {
+  if(e.key==='Enter'){ if(authMode==='register') document.getElementById('login-password2').focus(); else document.getElementById('login-btn').click(); }
+});
+document.getElementById('login-password2').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('login-btn').click(); });
+
+document.getElementById('btn-logout').addEventListener('click', async () => {
+  try{ if(currentUser) await currentUser.logout(); }catch(e){}
+  showLogin(); showToast('Logget ut');
+});
 
 // ── Lookup ──
 const inpOrder=document.getElementById('inp-order');
