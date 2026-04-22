@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Timelogg">
 <meta name="theme-color" content="#2e6da4">
 <title>Timelogg</title>
-<script src="https://cdn.jsdelivr.net/npm/gotrue-js@0.9.29/dist/gotrue.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gotrue-js@0.9.29/dist/gotrue.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
@@ -349,7 +349,9 @@ async function saveToBlobs(){
 function debouncedSave(){save();if(!currentUser)return;clearTimeout(syncTimeout);syncTimeout=setTimeout(saveToBlobs,1500);}
 
 // ── Identity (GoTrue) ──
-const auth = new GoTrue({
+const _GT = typeof GoTrue !== 'undefined' ? GoTrue : window.GoTrue;
+const GTClass = _GT.default || _GT;
+const auth = new GTClass({
   APIUrl: 'https://timelogg1.netlify.app/.netlify/identity',
   audience: '',
   setCookie: true,
