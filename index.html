@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Timelogg">
 <meta name="theme-color" content="#2e6da4">
 <title>Timelogg</title>
-<script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gotrue-js@0.9.29/dist/gotrue.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
@@ -150,18 +150,32 @@
   }
 
   /* login overlay */
-  .login-overlay{position:fixed;inset:0;background:var(--blue);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:20px}
+  .login-overlay{position:fixed;inset:0;background:var(--blue);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;gap:20px}
   .login-box{background:#fff;border-radius:var(--rl);padding:32px 28px;width:100%;max-width:360px}
   .login-title{font-size:18px;font-weight:500;color:var(--text);margin-bottom:4px}
   .login-sub{font-size:13px;color:var(--text3);margin-bottom:24px}
-  .login-btn{width:100%;background:var(--blue);border:none;border-radius:var(--r);padding:13px 0;font-size:14px;font-weight:500;color:#fff;cursor:pointer;transition:background .12s}
+
+  .login-btn{width:100%;background:var(--blue);border:none;border-radius:var(--r);padding:13px 0;font-size:14px;font-weight:500;color:#fff;cursor:pointer;transition:background .12s;margin-top:4px}
   .login-btn:active{background:var(--blue-dark)}
+  .login-tabs{display:flex;border-radius:var(--r);overflow:hidden;border:1px solid var(--border);margin-bottom:18px}
+  .login-tab{flex:1;background:var(--surface2);border:none;padding:9px 0;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;transition:background .12s,color .12s}
+  .login-tab.active{background:var(--blue);color:#fff}
+  .login-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:11px 12px;font-size:15px;color:var(--text);outline:none;margin-bottom:8px;-webkit-appearance:none;transition:border-color .15s}
+  .login-input:focus{border-color:var(--blue-mid);box-shadow:0 0 0 2px var(--blue-light)}
+  .login-msg{font-size:12px;margin-top:8px;min-height:16px;text-align:center}
+  .login-msg.err{color:var(--red)}
+  .login-msg.ok{color:var(--teal)}
   .login-user{font-family:var(--mono);font-size:11px;color:rgba(255,255,255,.7);letter-spacing:.04em}
   .sync-dot{width:7px;height:7px;border-radius:50%;background:#2a9d8f;display:inline-block;margin-right:5px;flex-shrink:0}
   .sync-dot.syncing{background:#e07b2a;animation:pulse .8s infinite}
   .sync-dot.error{background:var(--red)}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
   .sync-wrap{display:flex;align-items:center;font-family:var(--mono);font-size:10px;color:rgba(255,255,255,.6);letter-spacing:.04em}
+  .login-divider{display:flex;align-items:center;gap:10px;color:var(--text3);font-size:12px;margin:14px 0 2px}
+  .login-divider::before,.login-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+  .login-oauth-btn{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:11px 0;font-size:13px;font-weight:500;color:var(--text);cursor:pointer;transition:background .12s,border-color .12s;margin-top:7px;display:flex;align-items:center;justify-content:center;gap:8px}
+  .login-oauth-btn:hover{background:var(--surface3);border-color:var(--border2)}
+  .login-oauth-btn:active{background:var(--surface3)}
 </style>
 </head>
 <body>
@@ -169,10 +183,25 @@
 <div class="login-overlay" id="login-overlay">
   <div class="login-box">
     <div class="login-title">Timelogg</div>
-    <div class="login-sub">Logg inn for å fortsette</div>
-    <button class="login-btn" id="login-btn">Logg inn / Registrer</button>
+    <div class="login-tabs">
+      <button class="login-tab active" id="tab-login">Logg inn</button>
+      <button class="login-tab" id="tab-register">Registrer</button>
+    </div>
+    <input class="login-input" type="email" id="login-email" placeholder="E-post" autocomplete="email">
+    <input class="login-input" type="password" id="login-password" placeholder="Passord" autocomplete="current-password">
+    <input class="login-input" type="password" id="login-password2" placeholder="Bekreft passord" style="display:none">
+    <button class="login-btn" id="login-btn">Logg inn</button>
+    <div class="login-msg" id="login-msg"></div>
+    <div class="login-divider">eller</div>
+    <button class="login-oauth-btn" id="btn-google">
+      <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      Fortsett med Google
+    </button>
+    <button class="login-oauth-btn" id="btn-github">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+      Fortsett med GitHub
+    </button>
   </div>
-  <span class="login-user" id="login-user-label"></span>
 </div>
 
 <div class="topbar">
@@ -302,12 +331,6 @@ function setSyncStatus(status,label){
 }
 
 // ── Blobs ──
-async function getToken(){
-  const user=netlifyIdentity.currentUser();
-  if(!user)return null;
-  try{await user.jwt(true);return user.token.access_token;}catch(e){return null;}
-}
-
 async function loadFromBlobs(){
   const token=await getToken();if(!token)return;
   setSyncStatus('syncing','laster...');
@@ -333,17 +356,124 @@ async function saveToBlobs(){
 
 function debouncedSave(){save();if(!currentUser)return;clearTimeout(syncTimeout);syncTimeout=setTimeout(saveToBlobs,1500);}
 
-// ── Identity ──
-function showApp(user){currentUser=user;document.getElementById('login-overlay').style.display='none';loadFromBlobs();}
-function showLogin(){currentUser=null;document.getElementById('login-overlay').style.display='flex';}
+// ── Identity (GoTrue) ──
+const _GT = typeof GoTrue !== 'undefined' ? GoTrue : window.GoTrue;
+const GTClass = _GT.default || _GT;
+const auth = new GTClass({
+  APIUrl: 'https://timelogg1.netlify.app/.netlify/identity',
+  audience: '',
+  setCookie: true,
+});
 
-netlifyIdentity.on('init',user=>{if(user)showApp(user);else showLogin();});
-netlifyIdentity.on('login',user=>{netlifyIdentity.close();showApp(user);showToast('Logget inn som '+user.email);});
-netlifyIdentity.on('logout',()=>{showLogin();showToast('Logget ut');});
-netlifyIdentity.init();
+function showApp(user){
+  currentUser = user;
+  document.getElementById('login-overlay').style.display = 'none';
+  loadFromBlobs();
+}
+function showLogin(){
+  currentUser = null;
+  document.getElementById('login-overlay').style.display = 'flex';
+}
+async function getToken(){
+  if(!currentUser) return null;
+  try { await currentUser.jwt(true); return currentUser.token.access_token; } catch(e) { return null; }
+}
 
-document.getElementById('login-btn').addEventListener('click',()=>netlifyIdentity.open());
-document.getElementById('btn-logout').addEventListener('click',()=>netlifyIdentity.logout());
+// ── OAuth callback handler ──
+async function handleOAuthCallback() {
+  const hash = window.location.hash.slice(1);
+  if (!hash.includes('access_token')) return null;
+  const params = {};
+  hash.split('&').forEach(pair => {
+    const [k, v] = pair.split('=');
+    if (k) params[decodeURIComponent(k)] = decodeURIComponent(v || '');
+  });
+  history.replaceState(null, '', window.location.pathname + window.location.search);
+  try {
+    const user = await auth.createUser(params, true);
+    return user;
+  } catch(e) {
+    console.error('OAuth callback error:', e);
+    return null;
+  }
+}
+
+function loginWithProvider(provider) {
+  window.location.href = '/.netlify/identity/authorize?provider=' + provider;
+}
+
+// Restore session (handles both OAuth redirect and existing session)
+(async () => {
+  const oauthUser = await handleOAuthCallback();
+  if (oauthUser) {
+    showApp(oauthUser);
+    showToast('Logget inn');
+  } else {
+    const existing = auth.currentUser();
+    if (existing) showApp(existing); else showLogin();
+  }
+})();
+
+// Tabs
+let authMode = 'login';
+function setMode(mode){
+  authMode = mode;
+  document.getElementById('tab-login').classList.toggle('active', mode==='login');
+  document.getElementById('tab-register').classList.toggle('active', mode==='register');
+  document.getElementById('login-password2').style.display = mode==='register' ? '' : 'none';
+  document.getElementById('login-btn').textContent = mode==='register' ? 'Registrer' : 'Logg inn';
+  document.getElementById('login-msg').textContent = '';
+  document.getElementById('login-msg').className = 'login-msg';
+}
+document.getElementById('tab-login').addEventListener('click', () => setMode('login'));
+document.getElementById('tab-register').addEventListener('click', () => setMode('register'));
+
+// Submit
+document.getElementById('login-btn').addEventListener('click', async () => {
+  const email = document.getElementById('login-email').value.trim();
+  const pw = document.getElementById('login-password').value;
+  const pw2 = document.getElementById('login-password2').value;
+  const msg = document.getElementById('login-msg');
+  const btn = document.getElementById('login-btn');
+  msg.className = 'login-msg';
+  msg.textContent = '';
+  if(!email || !pw){ msg.className='login-msg err'; msg.textContent='Fyll inn e-post og passord'; return; }
+  if(authMode==='register' && pw !== pw2){ msg.className='login-msg err'; msg.textContent='Passordene stemmer ikke'; return; }
+  if(authMode==='register' && pw.length < 6){ msg.className='login-msg err'; msg.textContent='Passord må være minst 6 tegn'; return; }
+  btn.disabled = true;
+  btn.textContent = authMode==='register' ? 'Registrerer...' : 'Logger inn...';
+  try {
+    if(authMode === 'register'){
+      await auth.signup(email, pw);
+      msg.className = 'login-msg ok';
+      msg.textContent = 'Sjekk e-posten din for bekreftelseslenke ✓';
+      btn.disabled = false; btn.textContent = 'Registrer';
+    } else {
+      const user = await auth.login(email, pw, true);
+      showApp(user);
+      showToast('Logget inn som ' + user.email);
+    }
+  } catch(e){
+    msg.className = 'login-msg err';
+    msg.textContent = e.json?.error_description || e.message || 'Noe gikk galt';
+    btn.disabled = false;
+    btn.textContent = authMode==='register' ? 'Registrer' : 'Logg inn';
+  }
+});
+
+document.getElementById('login-email').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('login-password').focus(); });
+document.getElementById('login-password').addEventListener('keydown', e => {
+  if(e.key==='Enter'){ if(authMode==='register') document.getElementById('login-password2').focus(); else document.getElementById('login-btn').click(); }
+});
+document.getElementById('login-password2').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('login-btn').click(); });
+
+document.getElementById('btn-logout').addEventListener('click', async () => {
+  try{ if(currentUser) await currentUser.logout(); }catch(e){}
+  showLogin(); showToast('Logget ut');
+});
+
+document.getElementById('btn-google').addEventListener('click', () => loginWithProvider('google'));
+document.getElementById('btn-github').addEventListener('click', () => loginWithProvider('github'));
 
 // ── Lookup ──
 const inpOrder=document.getElementById('inp-order');
