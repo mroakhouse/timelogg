@@ -1,0 +1,42 @@
+﻿import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {PGlite} from '@electric-sql/pglite';
+import {validateDay,emptyDay,week,shift,importLegacy,total} from '../src/model.js';
+import {createHandler} from '../netlify/functions/data.mjs';
+import {messages} from '../src/i18n.js';
+const entry={id:'e1',kind:'time',start:'08:00',end:'10:30',hours:99,desc:'Work',order:'WBS-1'};
+test('time validation calculates duration, rejects overlaps and invalid ranges',()=>{
+ const d=validateDay({...emptyDay(),entries:[entry]});assert.equal(d.entries[0].hours,2.5);
+ assert.throws(()=>validateDay({...d,entries:[...d.entries,{...entry,id:'e2',start:'10:00',end:'11:00',hours:1}]}),/overlap/);
+ assert.throws(()=>validateDay({...d,entries:[{...entry,start:'23:00',end:'01:00',hours:2}]}),/invalidTime/);
+ assert.throws(()=>validateDay({...d,target:25}),/invalidTarget/);
+});
+test('week and legacy imports preserve decimal hours without inventing start times',()=>{
+ assert.equal(week('2026-09-20')[0],'2026-09-14');assert.equal(shift('2026-03-29',1),'2026-03-30');
+ const data=importLegacy({timelogg:{'2026-09-20':{target:7.5,entries:[{desc:'Legacy',order:'ABC',hours:1.25}]}}});
+ assert.equal(data['2026-09-20'].entries[0].kind,'manual');assert.equal(total(data['2026-09-20']),1.25);
+ assert.throws(()=>importLegacy({'2026-02-30':{entries:[]}}),/invalidDay/);
+});
+test('both languages contain the same translation keys',()=>assert.deepEqual(Object.keys(messages.nb).sort(),Object.keys(messages.en).sort()));
+test('real SQL: owners isolated, revisions conflict, writes atomic, API rejects unauthenticated and cross-origin requests',async()=>{
+ const db=new PGlite();await db.exec(await readFile(new URL('../netlify/database/migrations/202609200001_timelogg.sql',import.meta.url),'utf8'));
+ const client={query:(sql,args)=>db.query(sql,args),release(){}};
+ const factory=id=>createHandler({authenticate:async()=>id?{id}:null,database:()=>({pool:{connect:async()=>client}})});
+ const request=(method,body,origin='https://test.example')=>new Request('https://test.example/api/data',{method,headers:{origin,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+ const a=factory('alice'),b=factory('bob'),d={...emptyDay(),entries:[{...entry,hours:2.5}]};
+ assert.equal((await factory(null)(request('GET'))).status,401);
+ const switched=request('PUT',{date:'2026-09-20',day:d});switched.headers.set('X-Timelogg-Account','bob');assert.equal((await a(switched)).status,401);
+ assert.equal((await a(request('PUT',{date:'2026-09-20',day:d},'https://evil.example'))).status,403);
+ assert.equal((await a(request('PUT',{date:'2026-09-20',day:d,owner_id:'bob'}))).status,200);
+ let response=await (await a(request('GET'))).json();assert.equal(response.days['2026-09-20'].revision,1);assert.equal(response.days['2026-09-20'].entries[0].hours,2.5);
+ assert.deepEqual((await (await b(request('GET'))).json()).days,{});
+ assert.equal((await a(request('PUT',{date:'2026-09-20',day:d}))).status,409);
+ assert.equal((await b(request('PUT',{date:'2026-09-20',day:{...d,note:'Bob'}}))).status,200);
+ assert.equal((await a(request('PUT',{date:'2026-09-20',day:{...d,revision:1,entries:[]}}))).status,200);
+ response=await (await b(request('GET'))).json();assert.equal(response.days['2026-09-20'].entries.length,1);
+ assert.equal((await a(request('POST',{code:'P1',name:'Alice project'}))).status,200);
+ assert.deepEqual((await (await b(request('GET'))).json()).projects,[]);
+ assert.equal((await a(request('PUT',{date:'2026-09-20',day:{...d,target:100}}))).status,400);
+ await db.close();
+});
