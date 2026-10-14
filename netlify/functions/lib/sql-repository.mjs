@@ -1,4 +1,6 @@
-﻿export async function readData(client, owner) {
+﻿import { getDatabase } from '@netlify/database';
+// DISABLED: Netlify Database (PostgreSQL) storage, kept for a future switch back. See README "Switching back to Netlify Database".
+export async function readData(client, owner) {
   const {rows:days}=await client.query('SELECT work_date::text AS date, target_hours, note, status, revision FROM work_days WHERE owner_id=$1 ORDER BY work_date',[owner]);
   const {rows:entries}=await client.query(`SELECT work_date::text AS date, id, kind, description AS desc, wbs AS "order", addition_type AS type, to_char(start_time,'HH24:MI') AS start, to_char(end_time,'HH24:MI') AS end, hours FROM time_entries WHERE owner_id=$1 ORDER BY work_date, position`,[owner]);
   const result=Object.fromEntries(days.map(d=>[d.date,{target:Number(d.target_hours),note:d.note,status:d.status,revision:d.revision,entries:[]}]));
@@ -18,4 +20,12 @@ export async function writeDay(client,owner,date,day) {
     for(const [i,e] of day.entries.entries())await client.query('INSERT INTO time_entries(owner_id,work_date,id,position,kind,description,wbs,addition_type,start_time,end_time,hours) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',[owner,date,e.id,i,e.kind,e.desc,e.order,e.type,e.start||null,e.end||null,e.hours]);
     await client.query('COMMIT'); return revision;
   }catch(e){await client.query('ROLLBACK');throw e;}
+}
+export function createSqlRepository(database=getDatabase) {
+  const withClient=async fn=>{const client=await database().pool.connect();try{return await fn(client);}finally{client.release();}};
+  return {
+    readData:owner=>withClient(c=>readData(c,owner)),
+    writeDay:(owner,date,day)=>withClient(c=>writeDay(c,owner,date,day)),
+    saveProject:(owner,{code,name})=>withClient(c=>c.query('INSERT INTO projects(owner_id,code,name) VALUES($1,$2,$3) ON CONFLICT(owner_id,code) DO UPDATE SET name=$3',[owner,code,name])),
+  };
 }
