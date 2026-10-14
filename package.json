@@ -2,7 +2,7 @@
   "name": "timelogg",
   "version": "1.0.0",
   "dependencies": {
-    "@netlify/blobs": "^8.1.0",
+    "@netlify/blobs": "11.1.0",
     "@netlify/database": "^2.0.1",
     "@netlify/identity": "^2.0.0",
     "exceljs": "^4.4.0"
