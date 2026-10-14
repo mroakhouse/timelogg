@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {PGlite} from '@electric-sql/pglite';
-import {validateDay,emptyDay,week,shift,importLegacy,total} from '../src/model.js';
+import {validateDay,emptyDay,week,shift,importLegacy,total,clock} from '../src/model.js';
 import {createHandler} from '../netlify/functions/data.mjs';
 import {createBlobRepository} from '../netlify/functions/lib/blob-repository.mjs';
 import {createSqlRepository} from '../netlify/functions/lib/sql-repository.mjs';
@@ -13,6 +13,9 @@ test('time validation calculates duration, rejects overlaps and invalid ranges',
  assert.throws(()=>validateDay({...d,entries:[...d.entries,{...entry,id:'e2',start:'10:00',end:'11:00',hours:1}]}),/overlap/);
  assert.throws(()=>validateDay({...d,entries:[{...entry,start:'23:00',end:'01:00',hours:2}]}),/invalidTime/);
  assert.throws(()=>validateDay({...d,target:25}),/invalidTarget/);
+});
+test('typed times are normalized to 24-hour HH:MM',()=>{
+ for(const [input,out] of [['8','08:00'],['830','08:30'],['0830','08:30'],['8.30','08:30'],['17:45','17:45'],['23:59','23:59'],['24:00',''],['12:60',''],['8pm',''],['','']])assert.equal(clock(input),out,input);
 });
 test('week and legacy imports preserve decimal hours without inventing start times',()=>{
  assert.equal(week('2026-09-20')[0],'2026-09-14');assert.equal(shift('2026-03-29',1),'2026-03-30');
@@ -49,6 +52,8 @@ async function apiScenario(repository){
  response=await (await b(request('GET'))).json();assert.equal(response.days['2026-09-20'].entries.length,1);
  assert.equal((await a(request('POST',{code:'P1',name:'Alice project'}))).status,200);
  assert.deepEqual((await (await b(request('GET'))).json()).projects,[]);
+ assert.equal((await a(request('POST',{code:'P2',name:'Renamed',previousCode:'P1'}))).status,200);
+ assert.deepEqual((await (await a(request('GET'))).json()).projects,[{code:'P2',name:'Renamed'}]);
  assert.equal((await a(request('PUT',{date:'2026-09-20',day:{...d,target:100}}))).status,400);
 }
 test('real SQL (disabled storage): owners isolated, revisions conflict, API rejects unauthenticated and cross-origin requests',async()=>{

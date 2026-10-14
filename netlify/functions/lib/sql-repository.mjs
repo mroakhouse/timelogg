@@ -26,6 +26,6 @@ export function createSqlRepository(database=getDatabase) {
   return {
     readData:owner=>withClient(c=>readData(c,owner)),
     writeDay:(owner,date,day)=>withClient(c=>writeDay(c,owner,date,day)),
-    saveProject:(owner,{code,name})=>withClient(c=>c.query('INSERT INTO projects(owner_id,code,name) VALUES($1,$2,$3) ON CONFLICT(owner_id,code) DO UPDATE SET name=$3',[owner,code,name])),
+    saveProject:(owner,{code,name,previousCode})=>withClient(async c=>{if(previousCode&&previousCode!==code)await c.query('DELETE FROM projects WHERE owner_id=$1 AND code=$2',[owner,previousCode]);await c.query('INSERT INTO projects(owner_id,code,name) VALUES($1,$2,$3) ON CONFLICT(owner_id,code) DO UPDATE SET name=$3',[owner,code,name]);}),
   };
 }

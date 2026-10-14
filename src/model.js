@@ -4,6 +4,8 @@ export function shift(day, n) { const d=new Date(`${day}T12:00:00`); d.setDate(d
 export function week(day) { const n=new Date(`${day}T12:00:00`).getDay(); const monday=shift(day,-((n+6)%7)); return Array.from({length:7},(_,i)=>shift(monday,i)); }
 export const hours = (n,lang='nb') => Number(n).toLocaleString(lang==='nb'?'nb-NO':'en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
 export const emptyDay = () => ({target:7.5,note:'',status:'draft',revision:0,entries:[]});
+// Normalize typed 24-hour times: "8", "830", "8.30", "08:30" -> "08:30"; anything else -> ''.
+export function clock(value) { const m=String(value??'').trim().match(/^(\d{1,2})(?:[:.]?(\d{2}))?$/); if(!m) return ''; const hh=Number(m[1]),mm=Number(m[2]||0); return hh<24&&mm<60?`${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`:''; }
 export function duration(start,end) { const minutes=t=>Number(t.slice(0,2))*60+Number(t.slice(3)); return (minutes(end)-minutes(start))/60; }
 export function total(day, additions=false) { return (day?.entries||[]).filter(e=>additions || e.kind!=='addition').reduce((n,e)=>n+e.hours,0); }
 export function validateDay(value) {

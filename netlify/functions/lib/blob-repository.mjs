@@ -32,8 +32,9 @@ export function createBlobRepository(store=()=>getStore({name:'timelogg-data',co
       });
       return revision;
     },
-    async saveProject(owner,{code,name}) {
-      await update(store(),prefix(owner)+'projects',list=>[...(list||[]).filter(p=>p.code!==code),{code,name}]);
+    // previousCode renames a project; its entries are moved by the client through regular day saves.
+    async saveProject(owner,{code,name,previousCode}) {
+      await update(store(),prefix(owner)+'projects',list=>[...(list||[]).filter(p=>p.code!==code&&p.code!==previousCode),{code,name}]);
     },
   };
 }
