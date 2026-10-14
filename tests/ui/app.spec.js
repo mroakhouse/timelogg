@@ -40,3 +40,25 @@ test('desktop/mobile demo, entry editing, validation, language and persistence',
  expect((await download).suggestedFilename()).toBe('timelogg.xlsx');
  expect(errors).toEqual([]);
 });
+test('24-hour time entry and renaming a project moves its entries',async({page})=>{
+ await page.setViewportSize({width:1440,height:1050});await page.goto('/');
+ await page.getByRole('button',{name:'Utforsk en demo'}).click();
+ await page.locator('.entries-panel [data-action="addTime"]').click();
+ await page.locator('[name="start"]').fill('1700');await page.locator('[name="end"]').fill('18.30');
+ await page.locator('[name="desc"]').fill('Kveld');
+ await page.locator('#entry-form [type="submit"]').click();
+ await expect(page.locator('.entry-time').last()).toHaveText('17:00 – 18:30');
+ await page.locator('.sidebar [data-view="projects"]').click();
+ const card=page.locator('.project-card',{hasText:'WBS-10023'});
+ await card.locator('[data-action="editProject"]').click();
+ await expect(page.locator('#project-form [name="name"]')).toHaveValue('Planlegging');
+ await page.locator('#project-form [name="code"]').fill('WBS-99999');await page.locator('#project-form [name="name"]').fill('Ny planlegging');
+ page.once('dialog',d=>d.accept());
+ await page.locator('#project-form [type="submit"]').click();
+ await expect(page.locator('.project-card',{hasText:'WBS-10023'})).toHaveCount(0);
+ await expect(page.locator('.project-card',{hasText:'WBS-99999'})).toContainText('Ny planlegging');
+ await page.screenshot({path:'test-results/projects.png'});
+ await page.locator('.sidebar [data-view="day"]').click();
+ await expect(page.locator('.entry-wbs',{hasText:'WBS-99999'}).first()).toBeVisible();
+ await expect(page.locator('.entry-wbs',{hasText:'WBS-10023'})).toHaveCount(0);
+});

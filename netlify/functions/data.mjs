@@ -22,10 +22,10 @@ export function createHandler({authenticate=getUser, repository=createBlobReposi
         if(!body || !/^\d{4}-\d{2}-\d{2}$/.test(body.date)||dateKey(new Date(body.date+'T12:00:00'))!==body.date)return json({error:'invalidDay'},400);
         try{body.day=validateDay(body.day);}catch(e){return json({error:e.message},400);}
       }
-      if(req.method==='POST' && (!body || typeof body.code!=='string'||!body.code.trim()||body.code.length>100||typeof body.name!=='string'||!body.name.trim()||body.name.length>200))return json({error:'invalidText'},400);
+      if(req.method==='POST' && (!body || typeof body.code!=='string'||!body.code.trim()||body.code.length>100||typeof body.name!=='string'||!body.name.trim()||body.name.length>200||(body.previousCode!==undefined&&(typeof body.previousCode!=='string'||body.previousCode.length>100))))return json({error:'invalidText'},400);
       if(req.method==='GET')return json(await repository.readData(user.id));
       if(req.method==='PUT')return json({revision:await repository.writeDay(user.id,body.date,body.day)});
-      await repository.saveProject(user.id,{code:body.code.trim(),name:body.name.trim()});
+      await repository.saveProject(user.id,{code:body.code.trim(),name:body.name.trim(),previousCode:body.previousCode?.trim()||undefined});
       return json({ok:true});
     }catch(e){if(e.status===409)return json({error:'conflict'},409);if(e.status===403)return json({error:'forbidden'},403);console.error('Timelogg data request failed',e);return json({error:'serverError'},503);}
   };
