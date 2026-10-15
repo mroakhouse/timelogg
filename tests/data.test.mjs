@@ -14,6 +14,15 @@ test('time validation calculates duration, rejects overlaps and invalid ranges',
  assert.throws(()=>validateDay({...d,entries:[{...entry,start:'23:00',end:'01:00',hours:2}]}),/invalidTime/);
  assert.throws(()=>validateDay({...d,target:25}),/invalidTarget/);
 });
+test('breaks never count as work time and are subtracted from overlapping time entries',()=>{
+ const lunch={id:'b1',kind:'break',start:'11:30',end:'12:00',hours:0,desc:''};
+ const d=validateDay({...emptyDay(),entries:[{...entry,start:'08:00',end:'15:30'},lunch]});
+ assert.equal(d.entries[0].hours,7);assert.equal(d.entries[1].hours,0.5);assert.equal(total(d),7);
+ const gap=validateDay({...emptyDay(),entries:[{...entry,start:'08:00',end:'11:30'},lunch,{...entry,id:'e2',start:'12:00',end:'16:00'}]});
+ assert.equal(total(gap),7.5);
+ assert.throws(()=>validateDay({...emptyDay(),entries:[{...entry,start:'11:30',end:'12:00'},lunch]}),/breakCoversEntry/);
+ assert.throws(()=>validateDay({...emptyDay(),entries:[lunch,{...lunch,id:'b2',start:'11:45',end:'12:15'}]}),/overlap/);
+});
 test('typed times are normalized to 24-hour HH:MM',()=>{
  for(const [input,out] of [['8','08:00'],['830','08:30'],['0830','08:30'],['8.30','08:30'],['17:45','17:45'],['23:59','23:59'],['24:00',''],['12:60',''],['8pm',''],['','']])assert.equal(clock(input),out,input);
 });

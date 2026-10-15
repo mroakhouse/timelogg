@@ -7,7 +7,8 @@ export const emptyDay = () => ({target:7.5,note:'',status:'draft',revision:0,ent
 // Normalize typed 24-hour times: "8", "830", "8.30", "08:30" -> "08:30"; anything else -> ''.
 export function clock(value) { const m=String(value??'').trim().match(/^(\d{1,2})(?:[:.]?(\d{2}))?$/); if(!m) return ''; const hh=Number(m[1]),mm=Number(m[2]||0); return hh<24&&mm<60?`${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`:''; }
 export function duration(start,end) { const minutes=t=>Number(t.slice(0,2))*60+Number(t.slice(3)); return (minutes(end)-minutes(start))/60; }
-export function total(day, additions=false) { return (day?.entries||[]).filter(e=>additions || e.kind!=='addition').reduce((n,e)=>n+e.hours,0); }
+// Breaks never count as work time; additions only when asked for.
+export function total(day, additions=false) { return (day?.entries||[]).filter(e=>e.kind!=='break'&&(additions || e.kind!=='addition')).reduce((n,e)=>n+e.hours,0); }
 export function validateDay(value) {
   if(!value || typeof value!=='object' || !Array.isArray(value.entries) || value.entries.length>200) throw new Error('invalidDay');
   const target=Number(value.target);
@@ -15,10 +16,10 @@ export function validateDay(value) {
   if(!['draft','complete'].includes(value.status)) throw new Error('invalidDay');
   const text=(v,max)=>{if(typeof v!=='string'||v.length>max)throw new Error('invalidText');return v.trim();};
   const entries=value.entries.map(e=>{
-    if(!['time','addition','manual'].includes(e.kind))throw new Error('invalidDay');
+    if(!['time','break','addition','manual'].includes(e.kind))throw new Error('invalidDay');
     const entry={id:text(e.id,100),kind:e.kind,desc:text(e.desc,500),order:text(e.order||'',100),type:text(e.type||'',100),start:e.start||'',end:e.end||'',hours:Number(e.hours)};
-    if(!entry.id||!entry.desc)throw new Error('invalidEntry');
-    if(entry.kind==='time'){
+    if(!entry.id||(!entry.desc&&entry.kind!=='break'))throw new Error('invalidEntry');
+    if(entry.kind==='time'||entry.kind==='break'){
       const time=/^([01]\d|2[0-3]):[0-5]\d$/;
       if(!time.test(entry.start)||!time.test(entry.end)||duration(entry.start,entry.end)<=0)throw new Error('invalidTime');
       entry.hours=duration(entry.start,entry.end);
@@ -27,8 +28,15 @@ export function validateDay(value) {
     return entry;
   });
   if(new Set(entries.map(e=>e.id)).size!==entries.length)throw new Error('invalidDay');
-  const timed=entries.filter(e=>e.kind==='time').sort((a,b)=>a.start.localeCompare(b.start));
-  if(timed.some((e,i)=>i>0&&e.start<timed[i-1].end))throw new Error('overlap');
+  const timed=kind=>entries.filter(e=>e.kind===kind).sort((a,b)=>a.start.localeCompare(b.start));
+  const overlaps=list=>list.some((e,i)=>i>0&&e.start<list[i-1].end);
+  const work=timed('time'),breaks=timed('break');
+  if(overlaps(work)||overlaps(breaks))throw new Error('overlap');
+  // A break inside a time entry is subtracted from that entry's hours.
+  for(const e of work){
+    e.hours-=breaks.reduce((n,b)=>{const from=b.start>e.start?b.start:e.start,to=b.end<e.end?b.end:e.end;return from<to?n+duration(from,to):n;},0);
+    if(e.hours<=1e-9)throw new Error('breakCoversEntry');
+  }
   return {target,note:text(value.note||'',2000),status:value.status,revision:Number.isInteger(value.revision)&&value.revision>=0?value.revision:0,entries};
 }
 export function importLegacy(payload) {
