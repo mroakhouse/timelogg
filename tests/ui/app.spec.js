@@ -62,3 +62,15 @@ test('24-hour time entry and renaming a project moves its entries',async({page})
  await expect(page.locator('.entry-wbs',{hasText:'WBS-99999'}).first()).toBeVisible();
  await expect(page.locator('.entry-wbs',{hasText:'WBS-10023'})).toHaveCount(0);
 });
+test('breaks are logged with times but never count towards the day total',async({page})=>{
+ await page.setViewportSize({width:1440,height:1050});await page.goto('/');
+ await page.getByRole('button',{name:'Utforsk en demo'}).click();
+ await expect(page.locator('.summary-total strong')).toHaveText('7,50 h');
+ await page.locator('.entries-panel [data-action="addBreak"]').click();
+ await page.locator('[name="start"]').fill('1130');await page.locator('[name="end"]').fill('1230');
+ await page.locator('#entry-form [type="submit"]').click();
+ await expect(page.locator('.break-entry')).toContainText('Pause');
+ await expect(page.locator('.summary-total strong')).toHaveText('7,00 h');
+ await expect(page.locator('.entry',{hasText:'Utvikling'}).locator('.entry-hours')).toHaveText('1,00 h');
+ await page.screenshot({path:'test-results/break.png'});
+});
